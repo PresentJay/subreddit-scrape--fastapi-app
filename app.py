@@ -13,11 +13,11 @@ subredditName = "ProgrammerHumor"
 # set scraping candidate amount in subreddit once
 fetchingAmount = 99
 
-# if you got error or not image, bot will rescrape target subreddit ${duration} times.
-duration = 5
-
 # get randomly picked one image url in candidate amount.
 def getImgURL():
+    # if you got error or not image, bot will rescrape target subreddit ${duration} times.
+    duration = 5
+    
     url = f"https://www.reddit.com/r/{subredditName}.json?limit={fetchingAmount}"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0'}
     req = requests.get(url=url, headers=headers)
