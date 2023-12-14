@@ -39,9 +39,18 @@ def get_image_url():
             continue
 
         img_url_list = json_data.get("data", {}).get("children", [])
+        
+        if not img_url_list:
+            logger.warning("No image URLs found. Retrying...")
+            duration -= 1
+            sleep(random.random())
+            continue
+
         selected = random.choice(img_url_list)
         if selected.get("data", {}).get("post_hint") == "image":
             return selected["data"]["url"]
+
+    return None
 
 def serve_pil_image(pil_img, content_type):
     img_io = BytesIO()
