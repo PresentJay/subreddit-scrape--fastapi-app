@@ -1,3 +1,5 @@
+import json
+import logging
 import random
 import requests
 from flask import Flask, send_file
@@ -7,39 +9,45 @@ from time import sleep
 
 app = Flask(__name__)
 
-# set subreddit name
-subredditName = "ProgrammerHumor"
+# Constants
+SUBREDDIT_NAME = "ProgrammerHumor"
+FETCHING_AMOUNT = 99
 
-# set scraping candidate amount in subreddit once
-fetchingAmount = 99
+# Logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# get randomly picked one image url in candidate amount.
-def getImgURL():
-    # if you got error or not image, bot will rescrape target subreddit ${duration} times.
+def get_image_url():
     duration = 5
-    
-    url = f"https://www.reddit.com/r/{subredditName}.json?limit={fetchingAmount}"
+    url = f"https://www.reddit.com/r/{SUBREDDIT_NAME}.json?limit={FETCHING_AMOUNT}"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0'}
-    req = requests.get(url=url, headers=headers)
-    json = req.json()
+    
     while duration >= 1:
-        if "error" in json.keys():
-            # for avoiding server ban raised by same repetition time, it will randomed in real value of [0-1].
+        req = requests.get(url=url, headers=headers)
+        try:
+            json_data = req.json()
+        except json.decoder.JSONDecodeError:
+            logger.warning("Invalid JSON received. Retrying...")
             duration -= 1
             sleep(random.random())
             continue
-        imgURLlist = json["data"]["children"]
-        selected = random.choice(imgURLlist)
-        if selected["data"]["post_hint"] == "image":
+
+        if "error" in json_data.get("data", {}).get("children", []):
+            logger.warning("Error in response. Retrying...")
+            duration -= 1
+            sleep(random.random())
+            continue
+
+        img_url_list = json_data.get("data", {}).get("children", [])
+        selected = random.choice(img_url_list)
+        if selected.get("data", {}).get("post_hint") == "image":
             return selected["data"]["url"]
 
-# set given image streams to byte, downsizing, and return to file.
-# TODO: some images still raising an error to show in github readme. I guess this is because of size or something.
-def serve_pil_image(pil_img, contentType):
+def serve_pil_image(pil_img, content_type):
     img_io = BytesIO()
-    pil_img.save(img_io, contentType.split('/').pop(), quality=70)
+    pil_img.save(img_io, content_type.split('/').pop(), quality=70)
     img_io.seek(0)
-    return send_file(img_io, mimetype=contentType)
+    return send_file(img_io, mimetype=content_type)
 
 @app.after_request
 def set_response_headers(response):
@@ -48,15 +56,17 @@ def set_response_headers(response):
     response.headers['Expires'] = '0'
     return response
 
-# set flask routes in root to getting image file.
 @app.route("/", methods=['GET'])
 def return_meme():
-    img_url = getImgURL()
+    img_url = get_image_url()
     res = requests.get(img_url, stream=True)
 
     # set MIME type as scraped image MIME. (jpeg, png, gif ...)
-    contentType=res.raw.headers["Content-Type"]
+    content_type = res.raw.headers["Content-Type"]
 
     res.raw.decode_content = True
     img = Image.open(res.raw)
-    return serve_pil_image(img, contentType)
+    return serve_pil_image(img, content_type)
+
+if __name__ == "__main__":
+    app.run(debug=True)
