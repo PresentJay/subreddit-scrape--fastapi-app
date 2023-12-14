@@ -1,6 +1,6 @@
 import random
 import requests
-from flask import Flask, send_file, after_request
+from flask import Flask, send_file
 from PIL import Image
 from io import BytesIO
 from time import sleep
@@ -64,3 +64,6 @@ def return_meme():
     res.raw.decode_content = True
     img = Image.open(res.raw)
     return serve_pil_image(img, content_type)
+
+if __name__ == "__main__":
+    app.run(debug=True)
