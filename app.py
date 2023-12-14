@@ -59,10 +59,19 @@ def set_response_headers(response):
 @app.route("/", methods=['GET'])
 def return_meme():
     img_url = get_image_url()
+
+    if img_url is None:
+        # Handle the case where no valid image URL is found
+        return "No valid image found", 404  # You can customize this response as needed
+
     res = requests.get(img_url, stream=True)
 
-    # set MIME type as scraped image MIME. (jpeg, png, gif ...)
-    content_type = res.raw.headers["Content-Type"]
+    if res.status_code != 200:
+        # Handle the case where the image request is unsuccessful
+        return f"Error fetching image: {res.status_code}", 500  # You can customize this response as needed
+
+    # set MIME type as scraped image MIME (jpeg, png, gif ...)
+    content_type = res.headers.get("Content-Type", "image/jpeg")
 
     res.raw.decode_content = True
     img = Image.open(res.raw)
