@@ -22,8 +22,8 @@ def getImgURL():
     url = f"https://www.reddit.com/r/{subredditName}.json?limit={fetchingAmount}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Upgrade-Insecure-Requests': 1,
-        'Dnt': 1,
+        'Upgrade-Insecure-Requests': '1',
+        'Dnt': '1',
         'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120"',
         'Sec-Ch-Ua-Mobile': '?0',
         'Sec-Ch-Ua-Platform': 'macOS',
