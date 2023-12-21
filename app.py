@@ -1,4 +1,5 @@
 import random
+import json
 import requests
 from flask import Flask, send_file
 from PIL import Image
@@ -21,7 +22,16 @@ def getImgURL():
     url = f"https://www.reddit.com/r/{subredditName}.json?limit={fetchingAmount}"
     headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:20.0) Gecko/20100101 Firefox/20.0'}
     req = requests.get(url=url, headers=headers)
-    json = req.json()
+    if req.status_code == 200:
+        try:
+            json = req.json()
+        except json.decoder.JSONDecodeError as e:
+            print(f"JSON decoding error: {e}")
+    else:
+        print(f"Error: {req.status_code}")
+
+    print(req.content)
+    
     while duration >= 1:
         if "error" in json.keys():
             # for avoiding server ban raised by same repetition time, it will randomed in real value of [0-1].
