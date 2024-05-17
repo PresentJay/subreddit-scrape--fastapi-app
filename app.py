@@ -25,10 +25,9 @@ def getImgURL():
     url = f"https://oauth.reddit.com/r/{subredditName}/hot.json?limit={fetchingAmount}"
     headers = {
         "Authorization": f"Bearer {reddit_api_token}",
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Content-Type": "application/json",
+        "User-Agent": "MyBot/0.1 (https://www.example.com/my-bot)"
     }
-    req = requests.get(url=url, headers=headers)
+    req = requests.get(url=url, headers=headers, allow_redirects=False)
     if req.status_code == 200:
         try:
             json_data = req.json()
