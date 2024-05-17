@@ -28,32 +28,33 @@ reddit = praw.Reddit(
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 def get_img_url():
-    # Reddit API를 사용하여 최신 게시물 가져오기
     subreddit = reddit.subreddit("programmerhumor")
-    posts = subreddit.hot(limit=fetchingAmount)
+    posts = subreddit.hot(limit=100)
+    image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
+    return random.choice(image_posts) if image_posts else None
 
-    # 이미지 게시물의 URL 가져오기
-    image_posts = [post.url for post in posts if not post.is_self]
-    if image_posts:
-        return random.choice(image_posts)
-    else:
-        return None
+# 이미지 가져오기
+def get_image_from_url(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    image = Image.open(BytesIO(response.content))
+    return image, response.headers["Content-Type"]
 
 # Serve PIL image
-def serve_pil_image(pil_img, content_type):
+def serve_pil_image(image, content_type):
     img_io = BytesIO()
-    pil_img.save(img_io, format="JPEG")
+    image.save(img_io, format=content_type.split('/')[1].upper())
     img_io.seek(0)
     return send_file(img_io, mimetype=content_type)
 
 @app.route("/", methods=["GET"])
 def return_meme():
     img_url = get_img_url()
-    response = requests.get(img_url)
-    response.raise_for_status()
-    content_type = response.headers["Content-Type"]
-    image = Image.open(BytesIO(response.content))
-    return serve_pil_image(image, content_type)
+    if img_url:
+        image, content_type = get_image_from_url(img_url)
+        return serve_pil_image(image, content_type)
+    else:
+        return "No image found"
 
 if __name__ == "__main__":
     app.run()
