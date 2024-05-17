@@ -30,7 +30,13 @@ def get_access_token():
     }
     auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
     response = requests.post(url, data=data, auth=auth, headers={"User-Agent": "Reddit Image Scraper"})
-    return response.json().get("access_token")
+    if response.status_code == 200:
+        return response.json().get("access_token")
+    else:
+        print(f"Error: {response.status_code}")
+        print(response.content)
+        return None
+
 
 # Get randomly picked one image URL in candidate amount
 def getImgURL():
