@@ -14,20 +14,33 @@ subredditName = "programmerhumor"
 # Set scraping candidate amount in subreddit once
 fetchingAmount = 99
 
-# Get Reddit API token from environment variable
-reddit_api_token = os.getenv("REDDIT_API_TOKEN")
+# Get Reddit API credentials from environment variables
+client_id = os.getenv("REDDIT_CLIENT_ID")
+client_secret = os.getenv("REDDIT_CLIENT_SECRET")
+username = os.getenv("REDDIT_USERNAME")
+password = os.getenv("REDDIT_PASSWORD")
+
+# Authenticate and get access token
+def get_access_token():
+    url = "https://www.reddit.com/api/v1/access_token"
+    data = {
+        "grant_type": "password",
+        "username": username,
+        "password": password
+    }
+    auth = requests.auth.HTTPBasicAuth(client_id, client_secret)
+    response = requests.post(url, data=data, auth=auth, headers={"User-Agent": "Reddit Image Scraper"})
+    return response.json().get("access_token")
 
 # Get randomly picked one image URL in candidate amount
 def getImgURL():
-    # If you got an error or not an image, the bot will rescrape the target subreddit ${duration} times.
-    duration = 5
-
+    access_token = get_access_token()
     url = f"https://oauth.reddit.com/r/{subredditName}/hot.json?limit={fetchingAmount}"
     headers = {
-        "Authorization": f"Bearer {reddit_api_token}",
-        "User-Agent": "MyBot/0.1 (https://www.example.com/my-bot)"
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Reddit Image Scraper"
     }
-    req = requests.get(url=url, headers=headers, allow_redirects=False)
+    req = requests.get(url=url, headers=headers)
     if req.status_code == 200:
         try:
             json_data = req.json()
@@ -38,19 +51,12 @@ def getImgURL():
 
     print(req.content)
 
-    while duration >= 1:
-        if "error" in json_data.keys():
-            # For avoiding server ban raised by the same repetition time, it will be randomized in the real value of [0-1].
-            duration -= 1
-            sleep(random.random())
-            continue
-        imgURLlist = json_data["data"]["children"]
-        selected = random.choice(imgURLlist)
-        if selected["data"]["post_hint"] == "image":
-            return selected["data"]["url"]
+    imgURLlist = json_data["data"]["children"]
+    selected = random.choice(imgURLlist)
+    if selected["data"]["post_hint"] == "image":
+        return selected["data"]["url"]
 
 # Set given image streams to byte, downsizing, and return the file
-# TODO: some images still raise an error to show in GitHub readme. I guess this is because of size or something.
 def serve_pil_image(pil_img, contentType):
     img_io = BytesIO()
     pil_img.save(img_io, contentType.split("/").pop(), quality=70)
