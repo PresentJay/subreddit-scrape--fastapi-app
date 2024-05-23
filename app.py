@@ -29,10 +29,15 @@ reddit = praw.Reddit(
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 def get_img_url():
     subreddit = reddit.subreddit("programmerhumor")
-    posts = subreddit.hot(limit=100)
+    endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
+    posts = []
+    
+    for endpoint in endpoints:
+        posts.extend(endpoint(limit=50))
+    
     image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
     return random.choice(image_posts) if image_posts else None
-
+    
 # 이미지 가져오기
 def get_image_from_url(url):
     response = requests.get(url)
