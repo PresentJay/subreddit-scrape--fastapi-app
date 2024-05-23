@@ -67,7 +67,8 @@ async def get_image_from_url(url):
     """
     Fetch image from a given URL.
     """
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=60)  # Set timeout to 60 seconds
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(url) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="Error fetching image")
