@@ -1,6 +1,6 @@
 import random
 import os
-import praw
+import asyncpraw
 import aiohttp
 import asyncio
 from fastapi import FastAPI, HTTPException
@@ -20,13 +20,13 @@ password = os.getenv("REDDIT_PASSWORD")
 if not all([client_id, client_secret, username, password]):
     raise ValueError("Please set all required environment variables: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD")
 
-# Authenticate with praw
-reddit = praw.Reddit(
+# Authenticate with asyncpraw
+reddit = asyncpraw.Reddit(
     client_id=client_id,
     client_secret=client_secret,
     username=username,
     password=password,
-    user_agent="Reddit Image Scraper"
+    user_agent="Async Reddit Image Scraper"
 )
 
 # Caching for image URLs to reduce redundant requests
