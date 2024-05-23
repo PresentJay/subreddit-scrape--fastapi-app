@@ -1,5 +1,6 @@
-Flask
-requests
 Pillow
-gunicorn
 praw
+fastapi
+uvicorn
+aiohttp
+cachetools
