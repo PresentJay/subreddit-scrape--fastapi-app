@@ -1,12 +1,15 @@
 import random
 import os
 import praw
-import requests
-from flask import Flask, send_file
+import aiohttp
+import asyncio
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from PIL import Image
 from io import BytesIO
+from cachetools import TTLCache
 
-app = Flask(__name__)
+app = FastAPI()
 
 # Get Reddit API credentials from environment variables
 client_id = os.getenv("REDDIT_CLIENT_ID")
@@ -26,40 +29,55 @@ reddit = praw.Reddit(
     user_agent="Reddit Image Scraper"
 )
 
+# Caching for image URLs to reduce redundant requests
+cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
+
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
-def get_img_url():
+async def get_img_urls():
     subreddit = reddit.subreddit("programmerhumor")
     endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
-    posts = []
+    tasks = []
     
     for endpoint in endpoints:
-        posts.extend(endpoint(limit=50))
+        tasks.append(asyncio.to_thread(endpoint, limit=50))
+    
+    results = await asyncio.gather(*tasks)
+    posts = [post for result in results for post in result]
     
     image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
-    return random.choice(image_posts) if image_posts else None
-    
-# 이미지 가져오기
-def get_image_from_url(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    image = Image.open(BytesIO(response.content))
-    return image, response.headers["Content-Type"]
+    return image_posts
+
+# 비동기 이미지 가져오기
+async def get_image_from_url(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=response.status, detail="Error fetching image")
+            content_type = response.headers["Content-Type"]
+            content = await response.read()
+            image = Image.open(BytesIO(content))
+            return image, content_type
 
 # Serve PIL image
 def serve_pil_image(image, content_type):
     img_io = BytesIO()
     image.save(img_io, format=content_type.split('/')[1].upper())
     img_io.seek(0)
-    return send_file(img_io, mimetype=content_type)
+    return StreamingResponse(img_io, media_type=content_type)
 
-@app.route("/", methods=["GET"])
-def return_meme():
-    img_url = get_img_url()
-    if img_url:
-        image, content_type = get_image_from_url(img_url)
+@app.get("/", response_class=StreamingResponse)
+async def return_meme():
+    if "image_urls" not in cache:
+        cache["image_urls"] = await get_img_urls()
+    
+    img_url = random.choice(cache["image_urls"])
+    
+    try:
+        image, content_type = await get_image_from_url(img_url)
         return serve_pil_image(image, content_type)
-    else:
-        return "No image found"
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    app.run()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
