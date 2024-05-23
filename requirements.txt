@@ -4,4 +4,3 @@ fastapi
 uvicorn
 aiohttp
 cachetools
-gunicorn
