@@ -38,14 +38,14 @@ async def fetch_posts(subreddit, sort_type, limit=50):
     """
     posts = []
     if sort_type == 'hot':
-        async for post in subreddit.hot(limit=limit):
-            posts.append(post)
+        post = await subreddit.hot(limit=limit):
+        posts.append(post)
     elif sort_type == 'top':
-        async for post in subreddit.top(limit=limit):
-            posts.append(post)
+        post = await subreddit.top(limit=limit):
+        posts.append(post)
     elif sort_type == 'rising':
-        async for post in subreddit.rising(limit=limit):
-            posts.append(post)
+        post = await subreddit.rising(limit=limit):
+        posts.append(post)
     return posts
 
 
