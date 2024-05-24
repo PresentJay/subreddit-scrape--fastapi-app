@@ -38,12 +38,16 @@ async def fetch_posts(subreddit, sort_type, limit=50):
     """
     posts = []
     if sort_type == 'hot':
-        posts = [post async for post in subreddit.hot(limit=limit)]
+        async for post in subreddit.hot(limit=limit):
+            posts.append(post)
     elif sort_type == 'top':
-        posts = [post async for post in subreddit.top(limit=limit)]
+        async for post in subreddit.top(limit=limit):
+            posts.append(post)
     elif sort_type == 'rising':
-        posts = [post async for post in subreddit.rising(limit=limit)]
+        async for post in subreddit.rising(limit=limit):
+            posts.append(post)
     return posts
+
 
 async def get_img_urls():
     """
