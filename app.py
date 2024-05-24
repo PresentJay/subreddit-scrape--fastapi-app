@@ -1,8 +1,8 @@
 import random
 import os
+import asyncpraw
 import aiohttp
 import asyncio
-import asyncpraw
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from PIL import Image
@@ -34,27 +34,22 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
-    subreddit = await reddit.subreddit("programmerhumor")
-    tasks = [subreddit.hot(limit=100), subreddit.rising(limit=100)]
+    subreddit = reddit.subreddit("programmerhumor")
+    endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
+    tasks = []
     
-    async def fetch_posts(task):
-        posts = []
-        async for post in task:
-            posts.append(post)
-        return posts
-
-    # asyncio.create_task를 사용하여 태스크 생성
-    fetch_tasks = [asyncio.create_task(fetch_posts(task)) for task in tasks]
-    results = await asyncio.gather(*fetch_tasks)
+    for endpoint in endpoints:
+        tasks.append(asyncio.to_thread(endpoint, limit=50))
     
-    posts = [post for sublist in results for post in sublist]
-    image_urls = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
-    return image_urls
+    results = await asyncio.gather(*tasks)
+    posts = [post for result in results for post in result]
+    
+    image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
+    return image_posts
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
-    timeout = aiohttp.ClientTimeout(total=10)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="Error fetching image")
@@ -73,7 +68,7 @@ def serve_pil_image(image, content_type):
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
     if "image_urls" not in cache:
-        cache["image_urls"] = await asyncio.wait_for(get_img_urls(), timeout=30)
+        cache["image_urls"] = await get_img_urls()
     
     img_url = random.choice(cache["image_urls"])
     
