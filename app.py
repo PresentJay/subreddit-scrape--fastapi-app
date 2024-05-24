@@ -37,18 +37,21 @@ async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
     tasks = [subreddit.hot(limit=100), subreddit.rising(limit=100)]
     
-    # 비동기 코루틴으로 변환
     async def fetch_posts(task):
         posts = []
-        async for task in tasks:
-            posts.append(task)
+        async for post in task:
+            posts.append(post)
+        return posts
 
-    # 비동기적으로 포스트들을 가져오기
-    results = await asyncio.gather(*(fetch_posts(task) for task in tasks))
-    posts = [post for sublist in results for post in sublist]
+    # asyncio.gather 대신 asyncio.wait 사용
+    results = await asyncio.wait([fetch_posts(task) for task in tasks])
+    # 결과 가져오기
+    image_posts = []
+    for future in results[0]:
+        image_posts.extend(future.result())
     
-    image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
-    return image_posts
+    image_urls = [post.url for post in image_posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
+    return image_urls
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
