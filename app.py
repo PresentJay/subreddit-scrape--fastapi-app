@@ -53,7 +53,8 @@ async def get_img_urls():
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=10)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.get(url) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="Error fetching image")
