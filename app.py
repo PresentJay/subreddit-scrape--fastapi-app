@@ -32,47 +32,20 @@ reddit = asyncpraw.Reddit(
 # Caching for image URLs to reduce redundant requests
 cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
-async def fetch_posts(subreddit, sort_type, limit=50):
-    """
-    Fetch posts from a subreddit with a given sorting type.
-    """
-    posts = []
-    if sort_type == 'hot':
-        post = await subreddit.hot(limit=limit):
-        posts.append(post)
-    elif sort_type == 'top':
-        post = await subreddit.top(limit=limit):
-        posts.append(post)
-    elif sort_type == 'rising':
-        post = await subreddit.rising(limit=limit):
-        posts.append(post)
-    return posts
-
-
+# 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
-    """
-    Get image URLs from the 'programmerhumor' subreddit.
-    """
     subreddit = await reddit.subreddit("programmerhumor")
+    tasks = [subreddit.hot(limit=50), subreddit.top(limit=50), subreddit.rising(limit=50)]
     
-    # Fetch posts concurrently
-    hot_posts, top_posts, rising_posts = await asyncio.gather(
-        fetch_posts(subreddit, 'hot'),
-        fetch_posts(subreddit, 'top'),
-        fetch_posts(subreddit, 'rising')
-    )
+    results = await asyncio.gather(*tasks)
+    posts = [post async for result in results for post in result]
     
-    # Combine and filter image posts
-    posts = hot_posts + top_posts + rising_posts
     image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
     return image_posts
 
+# 비동기 이미지 가져오기
 async def get_image_from_url(url):
-    """
-    Fetch image from a given URL.
-    """
-    timeout = aiohttp.ClientTimeout(total=60)  # Set timeout to 60 seconds
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession() as session:
         async with session.get(url) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="Error fetching image")
@@ -81,10 +54,8 @@ async def get_image_from_url(url):
             image = Image.open(BytesIO(content))
             return image, content_type
 
+# Serve PIL image
 def serve_pil_image(image, content_type):
-    """
-    Serve a PIL image as an HTTP response.
-    """
     img_io = BytesIO()
     image.save(img_io, format=content_type.split('/')[1].upper())
     img_io.seek(0)
@@ -92,9 +63,6 @@ def serve_pil_image(image, content_type):
 
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
-    """
-    Return a random meme image from the 'programmerhumor' subreddit.
-    """
     if "image_urls" not in cache:
         cache["image_urls"] = await get_img_urls()
     
