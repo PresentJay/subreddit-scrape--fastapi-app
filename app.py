@@ -73,7 +73,7 @@ def serve_pil_image(image, content_type):
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
     if "image_urls" not in cache:
-        cache["image_urls"] = await get_img_urls()
+        cache["image_urls"] = await asyncio.wait_for(get_img_urls(), timeout=30)
     
     img_url = random.choice(cache["image_urls"])
     
