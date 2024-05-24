@@ -35,11 +35,13 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
-    tasks = [subreddit.hot(limit=50), subreddit.top(limit=50), subreddit.rising(limit=50)]
+    tasks = [subreddit.hot(limit=100), subreddit.rising(limit=100)]
     
     # 비동기 코루틴으로 변환
     async def fetch_posts(task):
-        return [post async for post in task]
+        posts = []
+        async for task in tasks:
+            posts.append(task)
 
     # 비동기적으로 포스트들을 가져오기
     results = await asyncio.gather(*(fetch_posts(task) for task in tasks))
