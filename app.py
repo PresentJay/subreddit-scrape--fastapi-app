@@ -44,8 +44,8 @@ async def get_img_urls():
         return posts
 
     # asyncio.create_task를 사용하여 태스크 생성
-    tasks = [asyncio.create_task(fetch_posts(task)) for task in tasks]
-    results = await asyncio.gather(*tasks)
+    fetch_tasks = [asyncio.create_task(fetch_posts(task)) for task in tasks]
+    results = await asyncio.gather(*fetch_tasks)
     
     posts = [post for sublist in results for post in sublist]
     image_urls = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
