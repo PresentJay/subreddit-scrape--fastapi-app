@@ -36,7 +36,10 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
     endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
-    tasks = [endpoint(limit=50) for endpoint in endpoints]
+    tasks = []
+    
+    for endpoint in endpoints:
+        tasks.append(endpoint(limit=50))
     
     results = await asyncio.gather(*tasks)
     posts = [post for result in results for post in result]
