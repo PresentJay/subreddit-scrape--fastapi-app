@@ -36,15 +36,13 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
     endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
-    tasks = []
     
+    image_posts = []
     for endpoint in endpoints:
-        tasks.append(endpoint(limit=50))
-    
-    results = await asyncio.gather(*tasks)
-    posts = [post for result in results for post in result]
-    
-    image_posts = [post.url for post in posts if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png'))]
+        async for post in endpoint(limit=50):
+            if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png')):
+                image_posts.append(post.url)
+                
     return image_posts
 
 # 비동기 이미지 가져오기
