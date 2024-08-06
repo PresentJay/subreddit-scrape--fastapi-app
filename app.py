@@ -47,7 +47,7 @@ async def populate_cache(cache, category):
     subreddit = await reddit.subreddit("programmerhumor")
     image_posts = []
 
-    async for submission in category(subreddit, limit=50):
+    async for submission in category(subreddit).limit(50):
         if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
             image_posts.append(submission.url)
 
