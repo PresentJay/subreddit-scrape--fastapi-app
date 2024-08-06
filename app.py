@@ -8,7 +8,6 @@ from fastapi.responses import StreamingResponse
 from PIL import Image
 from io import BytesIO
 from cachetools import TTLCache
-from contextlib import asynccontextmanager
 
 app = FastAPI()
 
@@ -33,13 +32,13 @@ reddit = asyncpraw.Reddit(
 # Caching for image URLs to reduce redundant requests
 cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@app.on_event("startup")
+async def startup_event():
     app.state.session = aiohttp.ClientSession()
-    yield
-    await app.state.session.close()
 
-app.lifespan(lifespan)
+@app.on_event("shutdown")
+async def shutdown_event():
+    await app.state.session.close()
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
