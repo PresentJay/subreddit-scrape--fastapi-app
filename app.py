@@ -42,7 +42,7 @@ async def shutdown_event():
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_random_img_url():
-    subreddit = await reddit.subreddit("programmerhumor")
+    subreddit = await reddit.subreddit("programmerhumor", fetch=True)
     category = random.choice([subreddit.hot, subreddit.top, subreddit.rising])
     
     image_posts = []
