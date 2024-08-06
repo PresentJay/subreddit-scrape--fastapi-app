@@ -54,13 +54,18 @@ async def get_img_urls():
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status != 200:
-                raise HTTPException(status_code=response.status, detail="Error fetching image")
-            content_type = response.headers["Content-Type"]
-            content = await response.read()
-            image = Image.open(BytesIO(content))
-            return image, content_type
+        try:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status != 200:
+                    raise HTTPException(status_code=response.status, detail="Error fetching image")
+                content_type = response.headers["Content-Type"]
+                content = await response.read()
+                image = Image.open(BytesIO(content))
+                return image, content_type
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="Timeout while fetching image")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
 
 # Serve PIL image
 def serve_pil_image(image, content_type):
