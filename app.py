@@ -20,15 +20,6 @@ password = os.getenv("REDDIT_PASSWORD")
 if not all([client_id, client_secret, username, password]):
     raise ValueError("Please set all required environment variables: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD")
 
-# Authenticate with asyncpraw
-reddit = asyncpraw.Reddit(
-    client_id=client_id,
-    client_secret=client_secret,
-    username=username,
-    password=password,
-    user_agent="Async Reddit Image Scraper"
-)
-
 # Caching for image URLs to reduce redundant requests
 cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
@@ -42,6 +33,15 @@ async def shutdown_event():
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_random_img_url():
+    # Authenticate with asyncpraw
+    reddit = asyncpraw.Reddit(
+        client_id=client_id,
+        client_secret=client_secret,
+        username=username,
+        password=password,
+        user_agent="Async Reddit Image Scraper"
+    )
+    
     subreddit = await reddit.subreddit("programmerhumor", fetch=True)
     category = random.choice([subreddit.hot, subreddit.top, subreddit.rising])
     
