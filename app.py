@@ -35,13 +35,19 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
-    endpoints = [subreddit.hot, subreddit.top, subreddit.rising]
-    
     image_posts = []
-    for endpoint in endpoints:
-        async for post in endpoint(limit=50):
-            if not post.is_self and (post.url.endswith('.jpg') or post.url.endswith('.png')):
-                image_posts.append(post.url)
+    
+    async for submission in subreddit.hot(limit=50):
+        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+            image_posts.append(submission.url)
+            
+    async for submission in subreddit.top(limit=50):
+        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+            image_posts.append(submission.url)
+            
+    async for submission in subreddit.rising(limit=50):
+        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+            image_posts.append(submission.url)
                 
     return image_posts
 
