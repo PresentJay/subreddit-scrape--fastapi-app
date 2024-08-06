@@ -45,7 +45,7 @@ async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
     image_posts = []
 
-    async with asyncio.timeout(10):
+    try:
         async for submission in subreddit.hot(limit=50):
             if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
                 image_posts.append(submission.url)
@@ -57,7 +57,8 @@ async def get_img_urls():
         async for submission in subreddit.rising(limit=50):
             if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
                 image_posts.append(submission.url)
-
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timeout while fetching image URLs")
     return image_posts
 
 # 비동기 이미지 가져오기
