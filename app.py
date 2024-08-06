@@ -34,7 +34,7 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
 @app.on_event("startup")
 async def startup_event():
-    app.state.session = aiohttp.ClientSession()
+    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -44,26 +44,27 @@ async def shutdown_event():
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
     image_posts = []
-    
-    async for submission in subreddit.hot(limit=50):
-        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-            image_posts.append(submission.url)
-            
-    async for submission in subreddit.top(limit=50):
-        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-            image_posts.append(submission.url)
-            
-    async for submission in subreddit.rising(limit=50):
-        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-            image_posts.append(submission.url)
-                
+
+    async with asyncio.timeout(10):
+        async for submission in subreddit.hot(limit=50):
+            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+                image_posts.append(submission.url)
+
+        async for submission in subreddit.top(limit=50):
+            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+                image_posts.append(submission.url)
+
+        async for submission in subreddit.rising(limit=50):
+            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+                image_posts.append(submission.url)
+
     return image_posts
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
     session = app.state.session
     try:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+        async with session.get(url) as response:
             if response.status != 200:
                 raise HTTPException(status_code=response.status, detail="Error fetching image")
             content_type = response.headers["Content-Type"]
