@@ -33,19 +33,21 @@ async def startup_event():
 async def shutdown_event():
     await app.state.session.close()
 
-async def populate_cache(cache, category):
-    # Authenticate with asyncpraw
-    reddit = asyncpraw.Reddit(
+def get_reddit_client():
+    return asyncpraw.Reddit(
         client_id=client_id,
         client_secret=client_secret,
         username=username,
         password=password,
         user_agent="Async Reddit Image Scraper"
     )
+
+async def populate_cache(cache, category):
+    reddit = get_reddit_client()
     subreddit = await reddit.subreddit("programmerhumor")
     image_posts = []
 
-    async for submission in category(limit=50):
+    async for submission in category(subreddit, limit=50):
         if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
             image_posts.append(submission.url)
 
@@ -57,9 +59,9 @@ async def populate_cache(cache, category):
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_random_img_url():
     categories = {
-        "hot": (cache_hot, reddit.subreddit("programmerhumor").hot),
-        "top": (cache_top, reddit.subreddit("programmerhumor").top),
-        "rising": (cache_rising, reddit.subreddit("programmerhumor").rising)
+        "hot": (cache_hot, lambda sub: sub.hot),
+        "top": (cache_top, lambda sub: sub.top),
+        "rising": (cache_rising, lambda sub: sub.rising)
     }
     
     choice = random.choice(list(categories.keys()))
