@@ -21,7 +21,9 @@ if not all([client_id, client_secret, username, password]):
     raise ValueError("Please set all required environment variables: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD")
 
 # Caching for image URLs to reduce redundant requests
-cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
+cache_hot = TTLCache(maxsize=100, ttl=7200)  # Cache with 100 items, TTL 2 hours
+cache_top = TTLCache(maxsize=100, ttl=7200)  # Cache with 100 items, TTL 2 hours
+cache_rising = TTLCache(maxsize=100, ttl=7200)  # Cache with 100 items, TTL 2 hours
 
 @app.on_event("startup")
 async def startup_event():
@@ -31,8 +33,7 @@ async def startup_event():
 async def shutdown_event():
     await app.state.session.close()
 
-# 이미지 게시물을 식별하여 이미지 URL 가져오기
-async def get_random_img_url():
+async def populate_cache(cache, category):
     # Authenticate with asyncpraw
     reddit = asyncpraw.Reddit(
         client_id=client_id,
@@ -41,20 +42,34 @@ async def get_random_img_url():
         password=password,
         user_agent="Async Reddit Image Scraper"
     )
-    
-    subreddit = await reddit.subreddit("programmerhumor", fetch=True)
-    category = random.choice([subreddit.hot, subreddit.top, subreddit.rising])
-    
+    subreddit = await reddit.subreddit("programmerhumor")
     image_posts = []
-    
+
     async for submission in category(limit=50):
         if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
             image_posts.append(submission.url)
-    
+
     if not image_posts:
         raise HTTPException(status_code=404, detail="No image posts found")
+
+    cache["image_urls"] = image_posts
+
+# 이미지 게시물을 식별하여 이미지 URL 가져오기
+async def get_random_img_url():
+    categories = {
+        "hot": (cache_hot, reddit.subreddit("programmerhumor").hot),
+        "top": (cache_top, reddit.subreddit("programmerhumor").top),
+        "rising": (cache_rising, reddit.subreddit("programmerhumor").rising)
+    }
     
-    return random.choice(image_posts)
+    choice = random.choice(list(categories.keys()))
+    cache, category = categories[choice]
+    
+    if "image_urls" not in cache:
+        await populate_cache(cache, category)
+    
+    image_urls = cache["image_urls"]
+    return random.choice(image_urls)
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
@@ -81,10 +96,7 @@ def serve_pil_image(image, content_type):
 
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
-    if "image_urls" not in cache:
-        cache["image_urls"] = await get_random_img_url()
-    
-    img_url = cache["image_urls"]
+    img_url = await get_random_img_url()
     
     try:
         image, content_type = await get_image_from_url(img_url)
