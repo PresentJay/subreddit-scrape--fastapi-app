@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from PIL import Image
 from io import BytesIO
 from cachetools import TTLCache
+from contextlib import asynccontextmanager
 
 app = FastAPI()
 
@@ -32,6 +33,14 @@ reddit = asyncpraw.Reddit(
 # Caching for image URLs to reduce redundant requests
 cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.session = aiohttp.ClientSession()
+    yield
+    await app.state.session.close()
+
+app.lifespan(lifespan)
+
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_img_urls():
     subreddit = await reddit.subreddit("programmerhumor")
@@ -53,19 +62,19 @@ async def get_img_urls():
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
-                if response.status != 200:
-                    raise HTTPException(status_code=response.status, detail="Error fetching image")
-                content_type = response.headers["Content-Type"]
-                content = await response.read()
-                image = Image.open(BytesIO(content))
-                return image, content_type
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Timeout while fetching image")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
+    session = app.state.session
+    try:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+            if response.status != 200:
+                raise HTTPException(status_code=response.status, detail="Error fetching image")
+            content_type = response.headers["Content-Type"]
+            content = await response.read()
+            image = Image.open(BytesIO(content))
+            return image, content_type
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="Timeout while fetching image")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
 
 # Serve PIL image
 def serve_pil_image(image, content_type):
