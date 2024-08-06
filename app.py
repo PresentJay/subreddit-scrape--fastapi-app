@@ -34,32 +34,27 @@ cache = TTLCache(maxsize=100, ttl=300)  # Cache with 100 items, TTL 300 seconds
 
 @app.on_event("startup")
 async def startup_event():
-    app.state.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+    app.state.session = aiohttp.ClientSession()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     await app.state.session.close()
 
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
-async def get_img_urls():
+async def get_random_img_url():
     subreddit = await reddit.subreddit("programmerhumor")
+    category = random.choice([subreddit.hot, subreddit.top, subreddit.rising])
+    
     image_posts = []
-
-    try:
-        async for submission in subreddit.hot(limit=50):
-            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-                image_posts.append(submission.url)
-
-        async for submission in subreddit.top(limit=50):
-            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-                image_posts.append(submission.url)
-
-        async for submission in subreddit.rising(limit=50):
-            if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
-                image_posts.append(submission.url)
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="Timeout while fetching image URLs")
-    return image_posts
+    
+    async for submission in category(limit=50):
+        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+            image_posts.append(submission.url)
+    
+    if not image_posts:
+        raise HTTPException(status_code=404, detail="No image posts found")
+    
+    return random.choice(image_posts)
 
 # 비동기 이미지 가져오기
 async def get_image_from_url(url):
@@ -87,9 +82,9 @@ def serve_pil_image(image, content_type):
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
     if "image_urls" not in cache:
-        cache["image_urls"] = await get_img_urls()
+        cache["image_urls"] = await get_random_img_url()
     
-    img_url = random.choice(cache["image_urls"])
+    img_url = cache["image_urls"]
     
     try:
         image, content_type = await get_image_from_url(img_url)
