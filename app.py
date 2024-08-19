@@ -4,7 +4,7 @@ import asyncpraw
 import aiohttp
 import asyncio
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from PIL import Image, ImageSequence
 from io import BytesIO
 from cachetools import TTLCache
@@ -106,7 +106,11 @@ def compress_image(image, content_type):
     img_io.seek(0)
     return img_io
 
-@app.get("/", response_class=Response)
+# 이미지 스트리밍 함수
+def stream_compressed_image(image_io, content_type):
+    return StreamingResponse(image_io, media_type=content_type)
+
+@app.get("/", response_class=StreamingResponse)
 async def return_meme():
     img_url = await get_random_img_url()
 
@@ -117,7 +121,7 @@ async def return_meme():
     try:
         image, content_type = await get_image_from_url(img_url)
         compressed_image_io = compress_image(image, content_type)
-        return Response(content=compressed_image_io.read(), media_type=content_type, headers=headers)
+        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
