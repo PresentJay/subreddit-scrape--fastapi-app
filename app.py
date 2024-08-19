@@ -4,8 +4,8 @@ import asyncpraw
 import aiohttp
 import asyncio
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
-from PIL import Image
+from fastapi.responses import Response
+from PIL import Image, ImageSequence
 from io import BytesIO
 from cachetools import TTLCache
 
@@ -48,7 +48,7 @@ async def populate_cache(cache, category):
     image_posts = []
 
     async for submission in category(subreddit, limit=50):
-        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png')):
+        if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png') or submission.url.endswith('.gif')):
             image_posts.append(submission.url)
 
     if not image_posts:
@@ -89,20 +89,31 @@ async def get_image_from_url(url):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
 
-# Serve PIL image
-def serve_pil_image(image, content_type):
+# 압축 처리 함수
+def compress_image(image, content_type):
     img_io = BytesIO()
-    image.save(img_io, format=content_type.split('/')[1].upper())
-    img_io.seek(0)
-    return StreamingResponse(img_io, media_type=content_type)
 
-@app.get("/", response_class=StreamingResponse)
+    if content_type == 'image/jpeg':
+        image.save(img_io, format='JPEG', quality=85)  # JPEG 압축, 품질 설정
+    elif content_type == 'image/png':
+        image.save(img_io, format='PNG', optimize=True)  # PNG 압축
+    elif content_type == 'image/gif':
+        frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
+        frames[0].save(img_io, format='GIF', save_all=True, append_images=frames[1:], optimize=True)
+    else:
+        raise HTTPException(status_code=415, detail="Unsupported media type")
+
+    img_io.seek(0)
+    return img_io
+
+@app.get("/", response_class=Response)
 async def return_meme():
     img_url = await get_random_img_url()
     
     try:
         image, content_type = await get_image_from_url(img_url)
-        return serve_pil_image(image, content_type)
+        compressed_image_io = compress_image(image, content_type)
+        return Response(content=compressed_image_io.read(), media_type=content_type)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
