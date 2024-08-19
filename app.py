@@ -5,7 +5,7 @@ import aiohttp
 import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from PIL import Image, ImageSequence
+from PIL import Image, ImageSequence, ImageOps
 from io import BytesIO
 from cachetools import TTLCache
 
@@ -89,22 +89,48 @@ async def get_image_from_url(url):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching image: {str(e)}")
 
-# 압축 처리 함수
+# 동적 압축 처리 함수
 def compress_image(image, content_type):
     img_io = BytesIO()
+    max_size = 5 * 1024 * 1024  # 5MB
+    quality = 85
 
-    if content_type == 'image/jpeg':
-        image.save(img_io, format='JPEG', quality=85)  # JPEG 압축, 품질 설정
-    elif content_type == 'image/png':
-        image.save(img_io, format='PNG', optimize=True)  # PNG 압축
-    elif content_type == 'image/gif':
-        frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
-        frames[0].save(img_io, format='GIF', save_all=True, append_images=frames[1:], optimize=True)
+    # 원본 이미지 크기 확인
+    img_byte_arr = BytesIO()
+    image.save(img_byte_arr, format=image.format)
+    image_size = img_byte_arr.tell()
+
+    # 이미지가 5MB를 초과하면 크기를 조절
+    if image_size > max_size:
+        print(f"Original image size is {image_size / (1024 * 1024):.2f} MB, resizing...")
+
+        # 품질을 낮추고 이미지 크기를 조정
+        while image_size > max_size and quality > 10:
+            img_io = BytesIO()
+            if content_type == 'image/jpeg':
+                image.save(img_io, format='JPEG', quality=quality)  # 품질 조정
+            elif content_type == 'image/png':
+                image = ImageOps.exif_transpose(image)
+                image.save(img_io, format='PNG', optimize=True)
+            elif content_type == 'image/gif':
+                frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
+                frames[0].save(img_io, format='GIF', save_all=True, append_images=frames[1:], optimize=True)
+            else:
+                raise HTTPException(status_code=415, detail="Unsupported media type")
+            
+            img_byte_arr = img_io
+            image_size = img_byte_arr.tell()
+            quality -= 10  # 품질을 단계적으로 낮춤
+
+        print(f"Final image size is {image_size / (1024 * 1024):.2f} MB after resizing.")
+
     else:
-        raise HTTPException(status_code=415, detail="Unsupported media type")
+        print(f"Original image size is {image_size / (1024 * 1024):.2f} MB, no resizing needed.")
+        img_io = img_byte_arr
 
     img_io.seek(0)
     return img_io
+
 
 # 이미지 스트리밍 함수
 def stream_compressed_image(image_io, content_type):
