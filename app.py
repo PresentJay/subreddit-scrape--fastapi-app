@@ -109,11 +109,15 @@ def compress_image(image, content_type):
 @app.get("/", response_class=Response)
 async def return_meme():
     img_url = await get_random_img_url()
+
+    headers = {
+        "Cache-Control": "no-cache"  # 캐시 제어 헤더 추가
+    }
     
     try:
         image, content_type = await get_image_from_url(img_url)
         compressed_image_io = compress_image(image, content_type)
-        return Response(content=compressed_image_io.read(), media_type=content_type)
+        return Response(content=compressed_image_io.read(), media_type=content_type, headers=headers)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
