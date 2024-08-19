@@ -59,9 +59,9 @@ async def populate_cache(cache, category):
 # 이미지 게시물을 식별하여 이미지 URL 가져오기
 async def get_random_img_url():
     categories = {
-        "hot": (cache_hot, lambda sub, limit: sub.hot(limit=limit)),
-        "top": (cache_top, lambda sub, limit: sub.top(limit=limit)),
-        "rising": (cache_rising, lambda sub, limit: sub.rising(limit=limit))
+        "hot": (cache_hot, lambda sub, limit: sub.hot(limit=50)),
+        "top": (cache_top, lambda sub, limit: sub.top(limit=50)),
+        "rising": (cache_rising, lambda sub, limit: sub.rising(limit=50))
     }
     
     choice = random.choice(list(categories.keys()))
