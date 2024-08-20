@@ -74,7 +74,7 @@ async def refresh_cache_periodically():
             reddit = get_reddit_client()
             subreddit = await reddit.subreddit("programmerhumor")
             
-            # 최대 70개의 URL을 가져옴
+            # 최대 100개의 URL을 가져옴
             async for submission in category(subreddit, limit=100):
                 if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png') or submission.url.endswith('.gif')):
                     if submission.url not in fetched_urls:
@@ -85,10 +85,12 @@ async def refresh_cache_periodically():
                         if len(new_cache) >= 50:
                             break
             
-            print(f"{name} 캐시가 {len(new_cache)}개의 유효한 URL로 갱신되었습니다.")
-            app.state.cache_buffers[name] = new_cache  # 새 캐시 버퍼에 저장
-        else:
-            await asyncio.sleep(7200)  # 2시간 대기
+            if len(new_cache) > 0:
+                print(f"{name} 캐시가 {len(new_cache)}개의 유효한 URL로 갱신되었습니다.")
+                app.state.cache_buffers[name] = new_cache  # 새 캐시 버퍼에 저장
+            else:
+                print(f"{name} 캐시 갱신 실패: 유효한 URL을 찾지 못했습니다.")
+        await asyncio.sleep(7200)  # 2시간 대기
 
 # 캐시에서 무작위로 URL 가져오기
 async def get_random_img_url():
@@ -100,11 +102,15 @@ async def get_random_img_url():
     
     choice = random.choice(list(categories.keys()))
     cache = categories[choice]
-    
-    if "image_urls" not in cache:
+
+    # 캐시가 비어있지 않은지 확인하고 스테이트 캐시를 가져오는 로직 개선
+    if "image_urls" not in cache or len(cache["image_urls"]) == 0:
         print(f"{choice} 캐시가 비어있습니다. 스테이트 캐시를 가져옵니다.")
-        cache["image_urls"] = app.state.cache_buffers[choice]  # 새 캐시로 교체
-    
+        if len(app.state.cache_buffers[choice]) > 0:
+            cache["image_urls"] = app.state.cache_buffers[choice]
+        else:
+            raise HTTPException(status_code=500, detail=f"{choice} 캐시에 유효한 이미지 URL이 없습니다. 나중에 다시 시도해주세요.")
+
     image_urls = cache["image_urls"]
     
     if len(image_urls) == 0:
@@ -177,16 +183,11 @@ def stream_compressed_image(image_io, content_type):
 # FastAPI 엔드포인트
 @app.get("/", response_class=StreamingResponse)
 async def return_meme():
-    img_url = await get_random_img_url()
-
-    headers = {
-        "Cache-Control": "no-cache"  # 캐시 제어 헤더 추가
-    }
-    
     try:
+        img_url = await get_random_img_url()
         image, content_type = await get_image_from_url(img_url)
         compressed_image_io = compress_image(image, content_type)
-        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers=headers)
+        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers={"Cache-Control": "no-cache"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
