@@ -63,7 +63,6 @@ async def verify_image_url(url):
 # 주기적으로 캐시를 갱신하는 함수
 async def refresh_cache_periodically():
     while True:
-        await asyncio.sleep(7200)  # 2시간 대기
         for name, (cache, category) in {
             "hot": (cache_hot, lambda sub, limit: sub.hot(limit=70)),
             "top": (cache_top, lambda sub, limit: sub.top(limit=70)),
@@ -88,6 +87,8 @@ async def refresh_cache_periodically():
             
             print(f"{name} 캐시가 {len(new_cache)}개의 유효한 URL로 갱신되었습니다.")
             app.state.cache_buffers[name] = new_cache  # 새 캐시 버퍼에 저장
+        else:
+            await asyncio.sleep(7200)  # 2시간 대기
 
 # 캐시에서 무작위로 URL 가져오기
 async def get_random_img_url():
@@ -100,8 +101,8 @@ async def get_random_img_url():
     choice = random.choice(list(categories.keys()))
     cache = categories[choice]
     
-    if "image_urls" not in cache or len(cache["image_urls"]) < 50:
-        print(f"{choice} 캐시에 데이터가 부족합니다. 캐시를 채웁니다...")
+    if "image_urls" not in cache:
+        print(f"{choice} 캐시가 비어있습니다. 스테이트 캐시를 가져옵니다.")
         cache["image_urls"] = app.state.cache_buffers[choice]  # 새 캐시로 교체
     
     image_urls = cache["image_urls"]
