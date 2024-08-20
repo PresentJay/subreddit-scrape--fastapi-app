@@ -187,7 +187,7 @@ async def return_meme():
         img_url = await get_random_img_url()
         image, content_type = await get_image_from_url(img_url)
         compressed_image_io = compress_image(image, content_type)
-        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers={"Cache-Control": "no-cache"})
+        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers={"Cache-Control": "max-age=0"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
