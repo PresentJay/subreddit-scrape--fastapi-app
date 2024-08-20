@@ -21,9 +21,9 @@ if not all([client_id, client_secret, username, password]):
     raise ValueError("필수 환경 변수를 설정해주세요: REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD")
 
 # 캐싱을 통한 이미지 URL 요청 감소 (2시간 TTL)
-cache_hot = TTLCache(maxsize=100, ttl=7200)
-cache_top = TTLCache(maxsize=100, ttl=7200)
-cache_rising = TTLCache(maxsize=100, ttl=7200)
+cache_hot = TTLCache(maxsize=50, ttl=7200)
+cache_top = TTLCache(maxsize=50, ttl=7200)
+cache_rising = TTLCache(maxsize=50, ttl=7200)
 
 @app.on_event("startup")
 async def startup_event():
@@ -64,9 +64,9 @@ async def verify_image_url(url):
 async def refresh_cache_periodically():
     while True:
         for name, (cache, category) in {
-            "hot": (cache_hot, lambda sub, limit: sub.hot(limit=70)),
-            "top": (cache_top, lambda sub, limit: sub.top(limit=70)),
-            "rising": (cache_rising, lambda sub, limit: sub.rising(limit=70))
+            "hot": (cache_hot, lambda sub, limit: sub.hot(limit=100)),
+            "top": (cache_top, lambda sub, limit: sub.top(limit=100)),
+            "rising": (cache_rising, lambda sub, limit: sub.rising(limit=100))
         }.items():
             new_cache = []
             fetched_urls = []
@@ -75,7 +75,7 @@ async def refresh_cache_periodically():
             subreddit = await reddit.subreddit("programmerhumor")
             
             # 최대 70개의 URL을 가져옴
-            async for submission in category(subreddit, limit=70):
+            async for submission in category(subreddit, limit=100):
                 if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png') or submission.url.endswith('.gif')):
                     if submission.url not in fetched_urls:
                         fetched_urls.append(submission.url)
