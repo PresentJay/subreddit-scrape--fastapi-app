@@ -149,7 +149,7 @@ def compress_image(image, content_type):
     # 이미지의 해상도가 너무 큰 경우 줄이기
     if image.size[0] > max_resolution[0] or image.size[1] > max_resolution[1]:
         print(f"이미지 해상도가 너무 큽니다. {image.size} -> {max_resolution}으로 줄입니다.")
-        image.thumbnail(max_resolution, Image.ANTIALIAS)
+        image.thumbnail(max_resolution, Image.LANCZOS)  # ANTIALIAS 대신 LANCZOS 사용
         image.save(img_byte_arr, format=image.format)
         image_size = img_byte_arr.tell()
 
@@ -181,6 +181,7 @@ def compress_image(image, content_type):
 
     img_io.seek(0)
     return img_io
+
 
 # 이미지 스트리밍 함수
 def stream_compressed_image(image_io, content_type):
