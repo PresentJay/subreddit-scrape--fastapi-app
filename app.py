@@ -138,6 +138,7 @@ async def get_image_from_url(url):
 def compress_image(image, content_type):
     img_io = BytesIO()
     max_size = 2 * 1024 * 1024  # 2MB
+    max_resolution = (1024, 1024)  # 최대 해상도 (너비, 높이)
     quality = 85
 
     # 원본 이미지 크기 확인
@@ -145,7 +146,14 @@ def compress_image(image, content_type):
     image.save(img_byte_arr, format=image.format)
     image_size = img_byte_arr.tell()
 
-    # 이미지가 2MB를 초과하면 크기를 조절
+    # 이미지의 해상도가 너무 큰 경우 줄이기
+    if image.size[0] > max_resolution[0] or image.size[1] > max_resolution[1]:
+        print(f"이미지 해상도가 너무 큽니다. {image.size} -> {max_resolution}으로 줄입니다.")
+        image.thumbnail(max_resolution, Image.ANTIALIAS)
+        image.save(img_byte_arr, format=image.format)
+        image_size = img_byte_arr.tell()
+
+    # 이미지가 2MB를 초과하면 품질 조정
     if image_size > max_size:
         print(f"원본 이미지 크기가 {image_size / (1024 * 1024):.2f} MB로 너무 큽니다. 압축을 진행합니다...")
 
@@ -155,7 +163,6 @@ def compress_image(image, content_type):
             if content_type == 'image/jpeg':
                 image.save(img_io, format='JPEG', quality=quality)  # 품질 조정
             elif content_type == 'image/png':
-                image = ImageOps.exif_transpose(image)
                 image.save(img_io, format='PNG', optimize=True)
             elif content_type == 'image/gif':
                 frames = [frame.copy() for frame in ImageSequence.Iterator(image)]
@@ -168,7 +175,6 @@ def compress_image(image, content_type):
             quality -= 10  # 품질을 단계적으로 낮춤
 
         print(f"최종 이미지 크기는 {image_size / (1024 * 1024):.2f} MB입니다.")
-
     else:
         print(f"이미지 크기는 {image_size / (1024 * 1024):.2f} MB로 적절합니다. 압축 불필요.")
         img_io = img_byte_arr
