@@ -138,7 +138,7 @@ async def get_image_from_url(url):
 def compress_image(image, content_type):
     img_io = BytesIO()
     max_size = 1 * 1024 * 1024  # 1MB
-    max_resolution = (1024, 1024)  # 최대 해상도 (너비, 높이)
+    max_resolution = (400, 400)  # 최대 해상도 (너비, 높이)
     quality = 85
 
     # 원본 이미지 크기 확인
