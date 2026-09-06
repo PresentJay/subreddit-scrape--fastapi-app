@@ -4,7 +4,7 @@ import asyncpraw
 import aiohttp
 import asyncio
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from PIL import Image, ImageSequence, ImageOps
 from io import BytesIO
 from cachetools import TTLCache
@@ -133,11 +133,35 @@ async def get_image_from_url(url):
             content_type = response.headers["Content-Type"]
             content = await response.read()
             image = Image.open(BytesIO(content))
-            return image, content_type
+            return content, image, content_type
     except asyncio.TimeoutError:
         raise HTTPException(status_code=504, detail="이미지를 가져오는 중 타임아웃 발생")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"이미지를 가져오는 중 오류 발생: {str(e)}")
+
+# 이 아래 크기면 아무것도 하지 않고 원본을 그대로 낸다.
+# 디코딩·재인코딩이 응답 시간의 대부분이라, 안 하는 게 제일 빠르다.
+PASS_THROUGH_BYTES = 300 * 1024
+# 움짤 상한. 넘으면 축소하지 않고 다른 밈을 고른다 (이유는 prepare_bytes 주석 참고).
+GIF_MAX_BYTES = 2 * 1024 * 1024
+PICK_ATTEMPTS = 3
+
+
+def prepare_bytes(raw, image, content_type):
+    """내보낼 바이트를 정한다. None 이면 이 밈은 건너뛰고 다른 걸 고른다."""
+    if getattr(image, "is_animated", False):
+        # 움짤은 PIL 로 다시 인코딩하지 않는다. 실측에서 480x360 300KB 짜리가
+        # 400x300 으로 줄였는데 2.6MB 가 됐다 — 원본이 갖고 있던 프레임 간 델타
+        # 최적화가 재인코딩에서 통째로 날아가기 때문이다. 프레임을 유지하면서
+        # 더 작게 만드는 건 gifsicle 급 도구가 필요한데, 밈 한 장 보여주자고
+        # 들일 비용이 아니다. 그래서 크기로만 거르고 무거우면 다른 걸 고른다.
+        return (raw, content_type) if len(raw) <= GIF_MAX_BYTES else None
+
+    if len(raw) <= PASS_THROUGH_BYTES:
+        return raw, content_type
+
+    return compress_image(image, content_type).getvalue(), content_type
+
 
 # 동적 압축 처리 함수
 def compress_image(image, content_type):
@@ -203,13 +227,26 @@ async def health():
 
 
 # FastAPI 엔드포인트
-@app.get("/", response_class=StreamingResponse)
+@app.get("/")
 async def return_meme():
     try:
-        img_url = await get_random_img_url()
-        image, content_type = await get_image_from_url(img_url)
-        compressed_image_io = compress_image(image, content_type)
-        return StreamingResponse(content=compressed_image_io, media_type=content_type, headers={"Cache-Control": "max-age=0"})
+        picked = None
+        for _ in range(PICK_ATTEMPTS):
+            img_url = await get_random_img_url()
+            raw, image, content_type = await get_image_from_url(img_url)
+            picked = prepare_bytes(raw, image, content_type)
+            if picked:
+                break
+        if not picked:
+            # 세 번 다 무거운 움짤이면 마지막 것을 그냥 낸다.
+            # 느린 게 아무것도 안 보이는 것보다 낫다.
+            picked = (raw, content_type)
+
+        data, out_type = picked
+        # Cache-Control: max-age=0 은 반드시 유지한다.
+        # 새로고침할 때마다 밈이 바뀌는 게 이 헤더 덕이다.
+        return Response(content=data, media_type=out_type,
+                        headers={"Cache-Control": "max-age=0"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
