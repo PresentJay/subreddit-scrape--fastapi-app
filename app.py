@@ -33,6 +33,8 @@ async def startup_event():
         "top": [],
         "rising": []
     }
+    # 미리 받아 처리해 둔 바이트. 요청은 여기서 하나 고르기만 한다.
+    app.state.ready = []
     asyncio.create_task(refresh_cache_periodically())  # 주기적 캐시 갱신 작업
 
 @app.on_event("shutdown")
@@ -95,7 +97,37 @@ async def refresh_cache_periodically():
                 app.state.cache_buffers[name] = new_cache  # 새 캐시 버퍼에 저장
             else:
                 print(f"{name} 캐시 갱신 실패: 유효한 URL을 찾지 못했습니다.")
+
+        await prewarm()
         await asyncio.sleep(7200)  # 2시간 대기
+
+
+async def prewarm(count=60):
+    """URL 목록이 아니라 내보낼 바이트를 미리 만들어 둔다.
+
+    예전에는 요청마다 Reddit 에서 이미지를 받아 PIL 로 처리했다. 왕복 바닥값이
+    0.4초인데 응답 중앙값이 1.7초였던 게 그 때문이다. 갱신 때 한 번 해두면
+    요청은 메모리에서 고르기만 하면 된다.
+    """
+    urls = []
+    for name in ("hot", "top", "rising"):
+        urls.extend(app.state.cache_buffers.get(name, []))
+    if not urls:
+        return
+
+    ready = []
+    for url in random.sample(urls, min(count, len(urls))):
+        try:
+            raw, image, content_type = await get_image_from_url(url)
+            picked = prepare_bytes(raw, image, content_type)
+            if picked:
+                ready.append(picked)
+        except Exception:
+            continue  # ponytail: 한 장 실패는 넘긴다. 60장 중 몇 장 빠져도 상관없다
+
+    if ready:
+        app.state.ready = ready
+        print(f"준비된 밈 {len(ready)}장 (합계 {sum(len(b) for b, _ in ready) // 1024}KB)")
 
 # 캐시에서 무작위로 URL 가져오기
 async def get_random_img_url():
@@ -223,13 +255,21 @@ def stream_compressed_image(image_io, content_type):
 @app.get("/health")
 async def health():
     buf = getattr(app.state, "cache_buffers", {})
-    return {"ok": True, "pool": {k: len(v) for k, v in buf.items()}}
+    return {"ok": True, "urls": {k: len(v) for k, v in buf.items()},
+            "ready": len(getattr(app.state, "ready", []))}
 
 
 # FastAPI 엔드포인트
 @app.get("/")
 async def return_meme():
     try:
+        pool = getattr(app.state, "ready", [])
+        if pool:
+            data, out_type = random.choice(pool)
+            return Response(content=data, media_type=out_type,
+                            headers={"Cache-Control": "max-age=0"})
+
+        # 아직 안 채워졌으면(부팅 직후) 예전 경로로 떨어진다.
         picked = None
         for _ in range(PICK_ATTEMPTS):
             img_url = await get_random_img_url()
