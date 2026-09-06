@@ -71,19 +71,24 @@ async def refresh_cache_periodically():
             new_cache = []
             fetched_urls = []
 
+            # 클라이언트를 만들면 닫는다. 예전에는 카테고리마다 새로 만들고 한 번도
+            # 닫지 않아 2시간마다 aiohttp 세션이 3개씩 샜다.
             reddit = get_reddit_client()
-            subreddit = await reddit.subreddit("programmerhumor")
-            
-            # 최대 100개의 URL을 가져옴
-            async for submission in category(subreddit, limit=100):
-                if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png') or submission.url.endswith('.gif')):
-                    if submission.url not in fetched_urls:
-                        fetched_urls.append(submission.url)
-                        # URL 유효성 검증 후 캐시에 추가
-                        if await verify_image_url(submission.url):
-                            new_cache.append(submission.url)
-                        if len(new_cache) >= 50:
-                            break
+            try:
+                subreddit = await reddit.subreddit("programmerhumor")
+
+                # 최대 100개의 URL을 가져옴
+                async for submission in category(subreddit, limit=100):
+                    if not submission.is_self and (submission.url.endswith('.jpg') or submission.url.endswith('.png') or submission.url.endswith('.gif')):
+                        if submission.url not in fetched_urls:
+                            fetched_urls.append(submission.url)
+                            # URL 유효성 검증 후 캐시에 추가
+                            if await verify_image_url(submission.url):
+                                new_cache.append(submission.url)
+                            if len(new_cache) >= 50:
+                                break
+            finally:
+                await reddit.close()
             
             if len(new_cache) > 0:
                 print(f"{name} 캐시가 {len(new_cache)}개의 유효한 URL로 갱신되었습니다.")
@@ -141,17 +146,19 @@ def compress_image(image, content_type):
     max_resolution = (400, 400)  # 최대 해상도 (너비, 높이)
     quality = 85
 
-    # 원본 이미지 크기 확인
-    img_byte_arr = BytesIO()
-    image.save(img_byte_arr, format=image.format)
-    image_size = img_byte_arr.tell()
-
-    # 이미지의 해상도가 너무 큰 경우 줄이기
-    if image.size[0] > max_resolution[0] or image.size[1] > max_resolution[1]:
+    # 줄일 거면 먼저 줄이고, 저장은 한 번만 한다.
+    # 예전에는 같은 BytesIO 에 두 번 써서 원본 뒤에 썸네일이 이어 붙었다 —
+    # tell() 이 원본+썸네일 합계를 내고, 1MB 아래면 그 버퍼가 그대로 나가서
+    # 브라우저가 앞의 원본을 그렸다. 즉 축소가 무효였다.
+    fmt = image.format
+    if fmt != "GIF" and (image.size[0] > max_resolution[0] or image.size[1] > max_resolution[1]):
+        # ponytail: GIF 는 건드리지 않는다. thumbnail() 이 첫 프레임만 남겨 움짤이 죽는다.
         print(f"이미지 해상도가 너무 큽니다. {image.size} -> {max_resolution}으로 줄입니다.")
-        image.thumbnail(max_resolution, Image.LANCZOS)  # ANTIALIAS 대신 LANCZOS 사용
-        image.save(img_byte_arr, format=image.format)
-        image_size = img_byte_arr.tell()
+        image.thumbnail(max_resolution, Image.LANCZOS)
+
+    img_byte_arr = BytesIO()
+    image.save(img_byte_arr, format=fmt)
+    image_size = img_byte_arr.tell()
 
     # 이미지가 2MB를 초과하면 품질 조정
     if image_size > max_size:
@@ -186,6 +193,14 @@ def compress_image(image, content_type):
 # 이미지 스트리밍 함수
 def stream_compressed_image(image_io, content_type):
     return StreamingResponse(image_io, media_type=content_type)
+
+# 키핑얼라이브용. 인스턴스만 깨우면 되므로 이미지를 받지 않는다.
+# "/" 를 5분마다 찌르면 하루 288번 Reddit 에서 이미지를 내려받고 PIL 로 처리하게 된다.
+@app.get("/health")
+async def health():
+    buf = getattr(app.state, "cache_buffers", {})
+    return {"ok": True, "pool": {k: len(v) for k, v in buf.items()}}
+
 
 # FastAPI 엔드포인트
 @app.get("/", response_class=StreamingResponse)
